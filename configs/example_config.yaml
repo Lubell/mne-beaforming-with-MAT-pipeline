@@ -1,0 +1,59 @@
+data_root: /path/to/data
+output_root: /path/to/derivatives
+subjects:
+  - 0006_15Y
+input:
+  preprocessed_dir: preprocessed
+  mri_dir: mri
+  preprocessed_extensions: [".fif", ".mat"]
+  # Optional MAT field mapping for legacy data files.
+  mat_schema:
+    data_key: data
+    sfreq_key: sfreq
+    ch_names_key: ch_names
+    tmin_key: tmin
+    ch_types_key: ch_types
+    events_key: events
+    event_id_key: event_id
+    tmin_default: -0.2
+    ch_types_default: mag
+  anatomy_files:
+    trans: trans.fif
+    bem: bem-sol.fif
+    src: src.fif
+
+preprocessing:
+  sfreq: 500
+  baseline: [-0.2, 0.0]
+  crop: [-0.2, 0.398]
+
+filtering:
+  bands:
+    - {name: b1, fmin: 28.0, fmax: 52.0}
+    - {name: b2, fmin: 52.0, fmax: 78.0}
+    - {name: b3, fmin: 78.0, fmax: 113.0}
+    - {name: b4, fmin: 113.0, fmax: 158.0}
+  method: fir
+  fir_design: firwin
+  apply_hilbert: true
+
+conditions:
+  # Query syntax follows pandas DataFrame.query
+  contrasts:
+    nat_unfilt_vs_lin_unfilt:
+      a: "stimulus == 'nat' and filter == 'unfilt'"
+      b: "stimulus == 'lin' and filter == 'unfilt'"
+
+stats:
+  tests: ["ttest_ind", "rank_sum"]
+  # Set true only after T2circ/Watson-Williams parity implementation.
+  allow_experimental: false
+  fdr_alpha: 0.05
+
+beamformer:
+  enabled: false
+  reg: 0.05
+  pick_ori: max-power
+  weight_norm: nai
+  data_cov_window: [-0.2, 0.398]
+  noise_cov_window: [-0.2, 0.0]
