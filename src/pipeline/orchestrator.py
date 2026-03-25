@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from .beamformer import apply_lcmv_to_epochs, build_forward, compute_covariances, make_lcmv_filters
 from .conditions import build_contrasts
@@ -54,6 +55,10 @@ def run_subject(subject_id: str, cfg: PipelineConfig) -> dict[str, Any]:
 
     epochs = load_preprocessed_subject(subject_id, cfg)
     epochs = _prep_epochs(epochs, cfg)
+
+    if epochs.metadata is None:
+        # Fallback metadata enables basic condition expressions on event labels.
+        epochs.metadata = pd.DataFrame({"event_code": epochs.events[:, 2].astype(int)})
 
     band_ds = build_band_dataset(epochs, cfg.raw["filtering"])
     save_derivative(band_ds["unfiltered"], subject_id, "filt_info", cfg)
