@@ -20,11 +20,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run one subject pipeline")
     parser.add_argument("--config", required=True, help="Path to YAML config")
     parser.add_argument("--subject", required=True, help="Subject ID")
+    parser.add_argument(
+        "--inspect-event-codes",
+        action="store_true",
+        help="Load/preprocess and report event code counts, then exit before metadata/filtering/stats",
+    )
     args = parser.parse_args()
 
     try:
         cfg = load_config(args.config)
-        result = run_subject(args.subject, cfg)
+        result = run_subject(args.subject, cfg, inspect_event_codes=args.inspect_event_codes)
     except (ValueError, FileNotFoundError, KeyError) as exc:
         print(f"Pipeline startup failed: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc

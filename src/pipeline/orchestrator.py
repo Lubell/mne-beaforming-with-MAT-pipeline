@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from collections import Counter
 
 import numpy as np
 import pandas as pd
@@ -49,16 +50,76 @@ def _stats_summary(stats_out: dict[str, Any]) -> dict[str, Any]:
     return summary
 
 
-def run_subject(subject_id: str, cfg: PipelineConfig) -> dict[str, Any]:
+def _event_code_summary(epochs) -> dict[str, Any]:
+    codes = [int(x) for x in epochs.events[:, 2].tolist()]
+    counts = Counter(codes)
+    sorted_codes = sorted(counts.keys())
+    return {
+        "n_unique_codes": len(sorted_codes),
+        "codes": sorted_codes,
+        "counts": {int(code): int(counts[code]) for code in sorted_codes},
+    }
+
+
+def _event_code_metadata_df(epochs) -> pd.DataFrame:
+    event_codes = [int(x) for x in epochs.events[:, 2].tolist()]
+
+    category_map: dict[int, str] = {
+        210: "nat", 213: "nat", 217: "nat",
+        230: "nat", 233: "nat", 237: "nat",
+        260: "nat", 263: "nat", 267: "nat",
+        520: "lin", 523: "lin", 527: "lin",
+        540: "lin", 543: "lin", 547: "lin",
+        550: "lin", 553: "lin", 557: "lin",
+    }
+    filter_map: dict[int, str] = {
+        210: "unfilt", 230: "unfilt", 260: "unfilt",
+        213: "lp", 233: "lp", 263: "lp",
+        217: "hp", 237: "hp", 267: "hp",
+        520: "unfilt", 540: "unfilt", 550: "unfilt",
+        523: "lp", 543: "lp", 553: "lp",
+        527: "hp", 547: "hp", 557: "hp",
+    }
+
+    metadata = pd.DataFrame({"event_code": event_codes})
+    metadata["category"] = [category_map.get(code, "unknown") for code in event_codes]
+    metadata["filter"] = [filter_map.get(code, "unknown") for code in event_codes]
+    metadata["is_known_code"] = metadata["category"].ne("unknown") & metadata["filter"].ne("unknown")
+    return metadata
+
+
+def run_subject(subject_id: str, cfg: PipelineConfig, inspect_event_codes: bool = False) -> dict[str, Any]:
     beam_cfg = cfg.raw.get("beamformer", {})
     validate_subject_runtime_inputs(subject_id, cfg, beamformer_enabled=bool(beam_cfg.get("enabled", False)))
 
     epochs = load_preprocessed_subject(subject_id, cfg)
     epochs = _prep_epochs(epochs, cfg)
 
+    inspection_cfg = cfg.raw.get("inspection", {})
+    inspect_only = bool(inspection_cfg.get("event_codes_only", False)) or bool(inspect_event_codes)
+    event_codes = _event_code_summary(epochs)
+
+    if inspect_only:
+        save_derivative(event_codes, subject_id, "event_codes", cfg)
+        return {
+            "subject": subject_id,
+            "saved": str(Path(cfg.output_root) / subject_id),
+            "n_epochs": len(epochs),
+            "inspection_only": True,
+            "event_codes": event_codes,
+        }
+
+    derived_metadata = _event_code_metadata_df(epochs)
     if epochs.metadata is None:
-        # Fallback metadata enables basic condition expressions on event labels.
-        epochs.metadata = pd.DataFrame({"event_code": epochs.events[:, 2].astype(int)})
+        # Fallback metadata with condition labels derived from event codes.
+        epochs.metadata = derived_metadata
+    else:
+        # Preserve existing metadata while ensuring standard condition columns exist.
+        merged = epochs.metadata.reset_index(drop=True).copy()
+        for col in derived_metadata.columns:
+            if col not in merged.columns:
+                merged[col] = derived_metadata[col].values
+        epochs.metadata = merged
 
     band_ds = build_band_dataset(epochs, cfg.raw["filtering"])
     save_derivative(band_ds["unfiltered"], subject_id, "filt_info", cfg)
@@ -106,6 +167,7 @@ def run_subject(subject_id: str, cfg: PipelineConfig) -> dict[str, Any]:
         "stats_tests": tests,
         "stats_ready": bool(contrasts and tests),
         "stats": stats_summary,
+        "event_codes": event_codes,
         "beamformer": beam_out,
     }
     return report

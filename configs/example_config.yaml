@@ -40,9 +40,12 @@ filtering:
 conditions:
   # Query syntax follows pandas DataFrame.query
   contrasts:
+    nat_vs_lin_all:
+      a: "category == 'nat'"
+      b: "category == 'lin'"
     nat_unfilt_vs_lin_unfilt:
-      a: "stimulus == 'nat' and filter == 'unfilt'"
-      b: "stimulus == 'lin' and filter == 'unfilt'"
+      a: "category == 'nat' and filter == 'unfilt'"
+      b: "category == 'lin' and filter == 'unfilt'"
 
 stats:
   tests: ["ttest_ind", "rank_sum"]
@@ -57,3 +60,8 @@ beamformer:
   weight_norm: nai
   data_cov_window: [-0.2, 0.398]
   noise_cov_window: [-0.2, 0.0]
+
+# Optional pre-metadata discovery mode.
+# When true, pipeline reports/saves event code counts and exits early.
+inspection:
+  event_codes_only: false
